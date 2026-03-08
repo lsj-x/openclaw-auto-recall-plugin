@@ -1,0 +1,10 @@
+{
+  "id": "auto-recall",
+  "name": "Auto Recall",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "plugin",
+  "memory": false,
+  "description": "自动记忆召回插件",
+  "configSchema": {}
+}

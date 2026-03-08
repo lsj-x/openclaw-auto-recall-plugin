@@ -1,0 +1,11 @@
+{
+  "name": "auto-recall",
+  "version": "1.0.0",
+  "description": "自动记忆召回插件",
+  "main": "index.js",
+  "openclaw": {
+    "type": "plugin",
+    "memory": false
+  },
+  "dependencies": {}
+}
