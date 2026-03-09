@@ -213,7 +213,7 @@ async function extractWithLLM(text) {
 
   try {
     const response = await callLLM(prompt);
-    console.log(`  [LLM RAW] ${response.substring(0, 200)}`); // DEBUG
+    console.error(`  [LLM RAW] ${response.substring(0, 200)}`); // DEBUG
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     
@@ -321,7 +321,7 @@ async function autoCapture(message) {
     }
     
     if (captures.length > 0) {
-      console.log(`🔍 自动捕获了 ${captures.length} 条记忆`);
+      console.error(`🔍 自动捕获了 ${captures.length} 条记忆`);
     }
     
     // 步骤 2: 搜索相关记忆
