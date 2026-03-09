@@ -1,24 +1,24 @@
 module.exports = {
   id: "auto-recall",
   activate({ registerHook }) {
-    registerHook("preGenerate", async ({ context, message }) => {
-      const { spawn } = require("child_process");
-      const path = require("path");
+    const { spawn } = require("child_process");
+    const path = require("path");
 
+    const handlePreGenerate = async ({ context, message }) => {
       // ========== 自动捕获 (autoCapture) ==========
       // OpenClaw 2026.2.12：捕获由 auto-recall-hook.js 内部统一执行（规则 + 条件 LLM）
       // 避免双写导致重复入库
 
       // ========== 自动召回 (autoRecall) ==========
-      // 读取阈值和限制（可以从环境变量传入，这里沿用原有逻辑）
       const recallThreshold = process.env.MEMORY_RECALL_THRESHOLD || "0.3"; // memory.threshold
-      const recallLimit = process.env.MEMORY_RECALL_LIMIT || "5";           // vectorRecall.limit
+      const recallLimit = process.env.MEMORY_RECALL_LIMIT || "5"; // vectorRecall.limit
 
       const hookPath = path.join(__dirname, "auto-recall-hook.js");
       const env = Object.assign({}, process.env, {
         OPENCLAW_USER_MESSAGE: message,
         AUTO_CAPTURE_ENABLED: process.env.AUTO_CAPTURE_ENABLED || "true",
-        CAPTURE_CATEGORIES: process.env.CAPTURE_CATEGORIES || "preference,decision,fact,lesson",
+        CAPTURE_CATEGORIES:
+          process.env.CAPTURE_CATEGORIES || "preference,decision,fact,lesson",
         MEMORY_RECALL_LIMIT: recallLimit,
         MEMORY_RECALL_THRESHOLD: recallThreshold
       });
@@ -45,7 +45,25 @@ module.exports = {
           resolve({});
         });
       });
-    });
+    };
+
+    // 兼容不同 OpenClaw 版本可能存在的 hook 命名差异
+    const hookCandidates = ["preGenerate", "pre_generate", "beforeGenerate"];
+    let registered = false;
+    for (const hookName of hookCandidates) {
+      try {
+        registerHook(hookName, handlePreGenerate);
+        registered = true;
+        console.error(`[auto-recall] registered hook: ${hookName}`);
+        break;
+      } catch (err) {
+        console.error(`[auto-recall] registerHook failed for ${hookName}: ${err.message}`);
+      }
+    }
+
+    if (!registered) {
+      console.error("[auto-recall] no compatible pre-generate hook was registered");
+    }
   },
   deactivate() {}
 };
