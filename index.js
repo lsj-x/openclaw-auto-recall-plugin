@@ -6,36 +6,8 @@ module.exports = {
       const path = require("path");
 
       // ========== 自动捕获 (autoCapture) ==========
-      // 这些参数可以从 OpenClaw 配置文件传入，为简化此处硬编码
-      const autoCaptureEnabled = true;   // memory.autoCapture
-      const captureCategories = ["preference", "decision", "fact", "lesson"]; // autoCaptureCategories
-
-      if (autoCaptureEnabled) {
-        const captureHookPath = path.join(__dirname, "auto-capture-hook.js");
-        const captureEnv = Object.assign({}, process.env, {
-          OPENCLAW_USER_MESSAGE: message,
-          CAPTURE_CATEGORIES: captureCategories.join(",")
-        });
-
-        // 异步执行捕获，不阻塞主流程（但 Promise 会等待其完成）
-        await new Promise((resolve) => {
-          const captureProc = spawn("node", [captureHookPath], {
-            env: captureEnv,
-            stdio: ["ignore", "pipe", "pipe"]
-          });
-
-          captureProc.stderr.on("data", (data) => {
-            console.error("AutoCapture Hook Error:", data.toString());
-          });
-
-          captureProc.on("close", (code) => {
-            if (code !== 0) {
-              console.error(`AutoCapture hook exited with code ${code}`);
-            }
-            resolve(); // 无论成功失败，都继续执行
-          });
-        });
-      }
+      // OpenClaw 2026.2.12：捕获由 auto-recall-hook.js 内部统一执行（规则 + 条件 LLM）
+      // 避免与 auto-capture-hook.js 双写导致重复入库
 
       // ========== 自动召回 (autoRecall) ==========
       // 读取阈值和限制（可以从环境变量传入，这里沿用原有逻辑）
@@ -45,6 +17,8 @@ module.exports = {
       const hookPath = path.join(__dirname, "auto-recall-hook.js");
       const env = Object.assign({}, process.env, {
         OPENCLAW_USER_MESSAGE: message,
+        AUTO_CAPTURE_ENABLED: process.env.AUTO_CAPTURE_ENABLED || "true",
+        CAPTURE_CATEGORIES: process.env.CAPTURE_CATEGORIES || "preference,decision,fact,lesson",
         MEMORY_RECALL_LIMIT: recallLimit,
         MEMORY_RECALL_THRESHOLD: recallThreshold
       });

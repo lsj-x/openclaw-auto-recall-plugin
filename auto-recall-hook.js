@@ -17,8 +17,13 @@ init();
 
 // 读取当前消息
 const message = process.env.OPENCLAW_USER_MESSAGE || process.argv[2] || '';
-const limit = parseInt(process.env.MEMORY_RECALL_LIMIT) || 5;
+const limit = parseInt(process.env.MEMORY_RECALL_LIMIT, 10) || 5;
 const threshold = parseFloat(process.env.MEMORY_RECALL_THRESHOLD) || 0.3;
+const autoCaptureEnabled = (process.env.AUTO_CAPTURE_ENABLED || 'true').toLowerCase() !== 'false';
+const captureCategories = (process.env.CAPTURE_CATEGORIES || 'preference,decision,fact,lesson')
+  .split(',')
+  .map((c) => c.trim())
+  .filter(Boolean);
 
 // SESSION-STATE.md 路径
 const SESSION_STATE_PATH = path.join(__dirname, '../../workspace/SESSION-STATE.md');
@@ -99,8 +104,6 @@ function simpleSimilarity(a, b) {
 // ========== 方案 1：快速规则提取 ==========
 
 function fastRuleExtract(text) {
-  const lower = text.toLowerCase();
-  
   // 决策模式（扩展）
   const decisionPatterns = [
     /(?:我|我们|建议|推荐|决定|选择|采用|将|应该|必须)(?:决定|选择|使用|采用|用|选)(.+?)(?:[。？]|$)/i,
@@ -165,6 +168,55 @@ function fastRuleExtract(text) {
   return null;
 }
 
+// ========== 方案 1.5：分类兜底提取（关键词 + 正则） ==========
+const CATEGORY_KEYWORDS = {
+  preference: ['喜欢', '爱好', 'prefer', 'like', 'love', 'enjoy', 'favorite'],
+  decision: ['决定', '选择', '打算', '计划', 'decide', 'choose', 'plan', 'intend', 'will'],
+  fact: ['注意', '关键', '记住', '事实', 'fact', 'actually', '相比', '更快', '更慢'],
+  lesson: ['经验', '教训', '学到', '明白', 'lesson', 'learned', 'realize', '体会']
+};
+
+const CATEGORY_PATTERNS = {
+  preference: [
+    /(?:我|我们)?(?:更)?(?:喜欢|偏好|倾向于|希望|想要)(.+?)(?:[。！？!?,，]|$)/i,
+    /(?:prefer|like|love)\s+(.+?)(?:[.!?,]|$)/i
+  ],
+  decision: [
+    /(?:我|我们)?(?:决定|选择|打算|计划|准备)(?:用|使用|采用)?(.+?)(?:[。！？!?,，]|$)/i,
+    /(?:decide|choose|plan|intend)\s+(?:to\s+)?(.+?)(?:[.!?,]|$)/i
+  ],
+  fact: [
+    /(?:事实|注意|关键|记住)(?:是|为|：|:)?(.+?)(?:[。！？!?,，]|$)/i,
+    /(.+?)(?:比|相比|相较于)(.+?)(?:更|更快|更慢|更好|更差)/i
+  ],
+  lesson: [
+    /(?:经验|教训|我学到|我明白|我意识到)(.+?)(?:[。！？!?,，]|$)/i,
+    /(?:lesson learned|learned that|realized that)\s+(.+?)(?:[.!?,]|$)/i
+  ]
+};
+
+function categoryFallbackExtract(text, categories) {
+  const normalizedText = text.toLowerCase();
+
+  for (const category of categories) {
+    const keywords = CATEGORY_KEYWORDS[category] || [];
+    const patterns = CATEGORY_PATTERNS[category] || [];
+
+    const keywordMatched = keywords.some((keyword) => normalizedText.includes(keyword.toLowerCase()));
+    const patternMatched = patterns.some((pattern) => pattern.test(text));
+
+    if (keywordMatched || patternMatched) {
+      return {
+        type: category,
+        content: text.length > 120 ? text.substring(0, 120) : text,
+        confidence: 0.65
+      };
+    }
+  }
+
+  return null;
+}
+
 // ========== 方案 2：条件 LLM 提取 ==========
 
 function shouldUseLLM(text) {
@@ -213,7 +265,7 @@ async function extractWithLLM(text) {
 
   try {
     const response = await callLLM(prompt);
-    console.log(`  [LLM RAW] ${response.substring(0, 200)}`); // DEBUG
+    console.error(`  [LLM RAW] ${response.substring(0, 200)}`); // DEBUG
     const jsonMatch = response.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     
@@ -278,6 +330,8 @@ function callLLM(prompt) {
 // ========== 主捕获逻辑 ==========
 
 async function autoCapture(message) {
+  if (!autoCaptureEnabled) return [];
+
   const captures = [];
   
   // 1. 快速规则（总是尝试）
@@ -291,6 +345,14 @@ async function autoCapture(message) {
     const llmCapture = await extractWithLLM(message);
     if (llmCapture) {
       captures.push(llmCapture);
+    }
+  }
+
+  // 2.5 分类兜底（解决“召回能触发但捕获未触发”的场景）
+  if (captures.length === 0) {
+    const fallbackCapture = categoryFallbackExtract(message, captureCategories);
+    if (fallbackCapture) {
+      captures.push(fallbackCapture);
     }
   }
   
@@ -321,7 +383,9 @@ async function autoCapture(message) {
     }
     
     if (captures.length > 0) {
-      console.log(`🔍 自动捕获了 ${captures.length} 条记忆`);
+      console.error(`🔍 自动捕获了 ${captures.length} 条记忆`);
+    } else {
+      console.error('🔍 本轮未捕获到可存储记忆');
     }
     
     // 步骤 2: 搜索相关记忆
