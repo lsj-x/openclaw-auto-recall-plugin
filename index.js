@@ -5,6 +5,11 @@ module.exports = {
     const path = require("path");
 
     const handlePreGenerate = async ({ context, message }) => {
+      const triggerId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const msgText = typeof message === "string" ? message : "";
+      console.error(
+        `[auto-recall] pre-generate triggered: id=${triggerId} messageLength=${msgText.length}`
+      );
       // ========== 自动捕获 (autoCapture) ==========
       // OpenClaw 2026.2.12：捕获由 auto-recall-hook.js 内部统一执行（规则 + 条件 LLM）
       // 避免双写导致重复入库
@@ -15,7 +20,7 @@ module.exports = {
 
       const hookPath = path.join(__dirname, "auto-recall-hook.js");
       const env = Object.assign({}, process.env, {
-        OPENCLAW_USER_MESSAGE: message,
+        OPENCLAW_USER_MESSAGE: msgText,
         AUTO_CAPTURE_ENABLED: process.env.AUTO_CAPTURE_ENABLED || "true",
         CAPTURE_CATEGORIES:
           process.env.CAPTURE_CATEGORIES || "preference,decision,fact,lesson",
