@@ -17,6 +17,8 @@ module.exports = {
       const hookPath = path.join(__dirname, "auto-recall-hook.js");
       const env = Object.assign({}, process.env, {
         OPENCLAW_USER_MESSAGE: message,
+        AUTO_CAPTURE_ENABLED: process.env.AUTO_CAPTURE_ENABLED || "true",
+        CAPTURE_CATEGORIES: process.env.CAPTURE_CATEGORIES || "preference,decision,fact,lesson",
         MEMORY_RECALL_LIMIT: recallLimit,
         MEMORY_RECALL_THRESHOLD: recallThreshold
       });
