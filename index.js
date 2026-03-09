@@ -52,15 +52,29 @@ module.exports = {
       });
     };
 
-    // 兼容不同 OpenClaw 版本可能存在的 hook 命名差异
+    // 兼容不同 OpenClaw 版本可能存在的 hook 注册签名差异
     const hookCandidates = ["preGenerate", "pre_generate", "beforeGenerate"];
     let registered = false;
+
+    const tryRegister = (hookName) => {
+      // 新版常见签名：registerHook({ name, handler })
+      try {
+        registerHook({ name: hookName, handler: handlePreGenerate });
+        return true;
+      } catch (_) {
+        // 旧版签名：registerHook(name, handler)
+        registerHook(hookName, handlePreGenerate);
+        return true;
+      }
+    };
+
     for (const hookName of hookCandidates) {
       try {
-        registerHook(hookName, handlePreGenerate);
-        registered = true;
-        console.error(`[auto-recall] registered hook: ${hookName}`);
-        break;
+        if (tryRegister(hookName)) {
+          registered = true;
+          console.error(`[auto-recall] registered hook: ${hookName}`);
+          break;
+        }
       } catch (err) {
         console.error(`[auto-recall] registerHook failed for ${hookName}: ${err.message}`);
       }
